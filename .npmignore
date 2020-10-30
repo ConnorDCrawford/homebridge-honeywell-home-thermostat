@@ -4,10 +4,6 @@
 
 .eslintrc
 
-# typescript
-
-tsconfig.json
-
 # vscode
 
 .vscode
