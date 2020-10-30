@@ -13,6 +13,8 @@ import { location, accessoryAttribute, T9Thermostat } from '../configTypes';
 export class T9 {
   private service: Service;
   fanService: any;
+  holdService: any;
+  removeHoldService: any;
 
   private modes: { Off: number; Heat: number; Cool: number; Auto: number };
 
@@ -24,7 +26,10 @@ export class T9 {
   HeatingThresholdTemperature!: number;
   CurrentRelativeHumidity!: number;
   TemperatureDisplayUnits!: number;
+  SetpointStatus!: string;
   honeywellMode!: Array<string>;
+  setpointStatusMode!: Array<string>;
+  noHoldSetpointStatusMode!: string;
   roompriority!: any;
   Active!: number;
   TargetFanState!: number;
@@ -55,6 +60,18 @@ export class T9 {
     // Map HomeKit Modes to Honeywell Modes
     // Don't change the order of these!
     this.honeywellMode = ['Off', 'Heat', 'Cool', 'Auto'];
+
+    this.noHoldSetpointStatusMode = 'NoHold';
+    this.setpointStatusMode = [
+      // Supported via switch, will turn off the switch
+      'TemporaryHold',
+      // Unsupported, will turn off the switch. List these values so we don't override the state when making unrelated updates
+      'HoldUntil', 'VacationHold',
+      // Supported via a transient switch, turning on will set thermostat to 'NoHold', which will reset the switch
+      this.noHoldSetpointStatusMode,
+      // Supported via switch, will turn on the switch
+      'PermanentHold',
+    ];
 
     // default placeholders
     this.CurrentTemperature;
@@ -171,6 +188,28 @@ export class T9 {
     } else if (this.fanService && this.platform.config.options?.thermostat?.hide_fan) {
       accessory.removeService(this.fanService);
     }
+
+    // Hold setpoint status controls
+    this.holdService = accessory.getServiceById(this.platform.Service.Switch, 'hold_mode_switch') ||
+    this.accessory.addService(
+      this.platform.Service.Switch,
+      `${this.device.name} ${this.device.deviceClass} Permanent Hold`,
+      'hold_mode_switch',
+    );
+    this.holdService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .on('set', this.setSetpointStatus.bind(this));
+
+    // Remove setpoint status control
+    this.removeHoldService = accessory.getServiceById(this.platform.Service.Switch, 'remove_hold_switch') ||
+    this.accessory.addService(
+      this.platform.Service.Switch,
+      `${this.device.name} ${this.device.deviceClass} Remove Hold`,
+      'remove_hold_switch',
+    );
+    this.removeHoldService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .on('set', this.setSetpointNoHoldStatus.bind(this));
 
     // Retrieve initial values and updateHomekit
     this.refreshStatus();
@@ -308,6 +347,9 @@ export class T9 {
         }
       }
     }
+
+    console.log('Parsing SetpointStatus: ' + this.device.changeableValues.thermostatSetpointStatus);
+    this.SetpointStatus = this.device.changeableValues.thermostatSetpointStatus;
   }
 
   /**
@@ -367,8 +409,9 @@ export class T9 {
   async pushChanges() {
     const payload = {
       mode: this.honeywellMode[this.TargetHeatingCoolingState],
-      thermostatSetpointStatus: this.platform.config.options?.thermostat?.thermostatSetpointStatus,
+      thermostatSetpointStatus: this.SetpointStatus,
       autoChangeoverActive: this.device.changeableValues.autoChangeoverActive,
+      nextPeriodTime: this.device.changeableValues.nextPeriodTime,
     } as any;
 
     // Set the heat and cool set point value based on the selected mode
@@ -391,7 +434,8 @@ export class T9 {
       `${payload.mode}, coolSetpoint:`,
       `${payload.coolSetpoint}, heatSetpoint:`,
       `${payload.heatSetpoint}, thermostatSetpointStatus:`,
-      this.platform.config.options?.thermostat?.thermostatSetpointStatus,
+      `${payload.thermostatSetpointStatus}, nextPeriodTime:`,
+      `${payload.nextPeriodTime}`,
     );
     this.platform.log.debug(JSON.stringify(payload));
 
@@ -492,6 +536,16 @@ export class T9 {
       this.fanService.updateCharacteristic(this.platform.Characteristic.TargetFanState, this.TargetFanState);
       this.fanService.updateCharacteristic(this.platform.Characteristic.Active, this.Active);
     }
+    console.log('Update HomeKit SetpointStatus: ' + this.SetpointStatus);
+    this.holdService.updateCharacteristic(
+      this.platform.Characteristic.On,
+      // Any value other than the last in setpointStatusMode ('PermanentHold') will turn the switch off
+      Math.floor(Math.max(this.setpointStatusMode.indexOf(this.SetpointStatus), 0) / (this.setpointStatusMode.length - 1)),
+    );
+    this.removeHoldService.updateCharacteristic(
+      this.platform.Characteristic.On,
+      this.noHoldSetpointStatusMode === this.SetpointStatus,
+    );
   }
 
   setTargetHeatingCoolingState(value: any, callback: (arg0: null) => void) {
@@ -544,6 +598,25 @@ export class T9 {
       );
     }, 100);
 
+    callback(null);
+  }
+
+  setSetpointStatus(value: any, callback: (arg0: null) => void) {
+    // Will set SetpointStatus to the first element in setpointStatusMode ('TemporaryHold') if off, or the last ('PermanentHold') if on
+    value = this.setpointStatusMode[value * (this.setpointStatusMode.length - 1)];
+    this.platform.log.debug(`Set SetpointStatus: ${value}`);
+    this.SetpointStatus = value;
+    this.doThermostatUpdate.next();
+    callback(null);
+  }
+
+  setSetpointNoHoldStatus(value: any, callback: (arg0: null) => void) {
+    if (value) {
+      value = this.noHoldSetpointStatusMode;
+      this.platform.log.debug(`Set SetpointStatus: ${value}`);
+      this.SetpointStatus = value;
+      this.doThermostatUpdate.next();
+    }
     callback(null);
   }
 

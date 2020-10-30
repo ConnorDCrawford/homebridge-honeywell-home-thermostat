@@ -25,6 +25,7 @@ export type options = {
 export type thermostat = {
   hide?: boolean;
   hide_fan?: boolean;
+  // TODO: Remove when HomeKit-configurable setpoint is implemented on all models
   thermostatSetpointStatus?: string;
 };
 
