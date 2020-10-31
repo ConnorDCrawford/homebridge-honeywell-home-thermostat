@@ -15,7 +15,7 @@ export declare class T9 {
     private service;
     fanService: any;
     holdService: any;
-    removeHoldService: any;
+    holdEnabledService: any;
     private modes;
     CurrentTemperature: number;
     TargetTemperature: number;
@@ -65,8 +65,8 @@ export declare class T9 {
     setCoolingThresholdTemperature(value: any, callback: (arg0: null) => void): void;
     setTargetTemperature(value: any, callback: (arg0: null) => void): void;
     setTemperatureDisplayUnits(value: any, callback: (arg0: null) => void): void;
-    setSetpointStatus(value: any, callback: (arg0: null) => void): void;
-    setSetpointNoHoldStatus(value: any, callback: (arg0: null) => void): void;
+    setSetpointStatusHoldMode(value: any, callback: (arg0: null) => void): void;
+    setSetpointStatusHoldEnabled(value: any, callback: (arg0: null) => void): void;
     /**
      * Converts the value to celsius if the temperature units are in Fahrenheit
      */

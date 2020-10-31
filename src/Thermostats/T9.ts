@@ -14,7 +14,7 @@ export class T9 {
   private service: Service;
   fanService: any;
   holdService: any;
-  removeHoldService: any;
+  holdEnabledService: any;
 
   private modes: { Off: number; Heat: number; Cool: number; Auto: number };
 
@@ -189,6 +189,18 @@ export class T9 {
       accessory.removeService(this.fanService);
     }
 
+    // Remove setpoint status control
+    this.holdEnabledService =
+      accessory.getServiceById(this.platform.Service.Switch, 'hold_enabled_switch') ||
+      this.accessory.addService(
+        this.platform.Service.Switch,
+        `${this.device.name} ${this.device.deviceClass} Hold Enabled`,
+        'hold_enabled_switch',
+      );
+    this.holdEnabledService
+      .getCharacteristic(this.platform.Characteristic.On)
+      .on('set', this.setSetpointStatusHoldEnabled.bind(this));
+
     // Hold setpoint status controls
     this.holdService = accessory.getServiceById(this.platform.Service.Switch, 'hold_mode_switch') ||
     this.accessory.addService(
@@ -198,18 +210,7 @@ export class T9 {
     );
     this.holdService
       .getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setSetpointStatus.bind(this));
-
-    // Remove setpoint status control
-    this.removeHoldService = accessory.getServiceById(this.platform.Service.Switch, 'remove_hold_switch') ||
-    this.accessory.addService(
-      this.platform.Service.Switch,
-      `${this.device.name} ${this.device.deviceClass} Remove Hold`,
-      'remove_hold_switch',
-    );
-    this.removeHoldService
-      .getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setSetpointNoHoldStatus.bind(this));
+      .on('set', this.setSetpointStatusHoldMode.bind(this));
 
     // Retrieve initial values and updateHomekit
     this.refreshStatus();
@@ -536,15 +537,14 @@ export class T9 {
       this.fanService.updateCharacteristic(this.platform.Characteristic.TargetFanState, this.TargetFanState);
       this.fanService.updateCharacteristic(this.platform.Characteristic.Active, this.Active);
     }
-    console.log('Update HomeKit SetpointStatus: ' + this.SetpointStatus);
     this.holdService.updateCharacteristic(
       this.platform.Characteristic.On,
       // Any value other than the last in setpointStatusMode ('PermanentHold') will turn the switch off
       Math.floor(Math.max(this.setpointStatusMode.indexOf(this.SetpointStatus), 0) / (this.setpointStatusMode.length - 1)),
     );
-    this.removeHoldService.updateCharacteristic(
+    this.holdEnabledService.updateCharacteristic(
       this.platform.Characteristic.On,
-      this.noHoldSetpointStatusMode === this.SetpointStatus,
+      this.noHoldSetpointStatusMode !== this.SetpointStatus,
     );
   }
 
@@ -601,24 +601,26 @@ export class T9 {
     callback(null);
   }
 
-  setSetpointStatus(value: any, callback: (arg0: null) => void) {
-    // Will set SetpointStatus to the first element in setpointStatusMode ('TemporaryHold') if off, or the last ('PermanentHold') if on
-    value = this.setpointStatusMode[value * (this.setpointStatusMode.length - 1)];
-    this.platform.log.debug(`Set SetpointStatus: ${value}`);
-    this.SetpointStatus = value;
-    this.doThermostatUpdate.next();
-    callback(null);
-  }
-
-  setSetpointNoHoldStatus(value: any, callback: (arg0: null) => void) {
-    if (value) {
-      value = this.noHoldSetpointStatusMode;
+  setSetpointStatusHoldMode(value: any, callback: (arg0: null) => void) {
+    if (this.noHoldSetpointStatusMode !== this.SetpointStatus) {
+      // Will set SetpointStatus to the first element in setpointStatusMode ('TemporaryHold') if off, or the last ('PermanentHold') if on
+      value = this.setpointStatusMode[value * (this.setpointStatusMode.length - 1)];
       this.platform.log.debug(`Set SetpointStatus: ${value}`);
       this.SetpointStatus = value;
       this.doThermostatUpdate.next();
-      // Do an additional update to get the new Setpoint Status after clearing the hold
-      this.doThermostatUpdate.next();
+    } else {
+      // Hold is disabled, return hold mode switch to off
+      this.holdService.updateCharacteristic(this.platform.Characteristic.On, false);
     }
+    callback(null);
+  }
+
+  setSetpointStatusHoldEnabled(value: any, callback: (arg0: null) => void) {
+    // If on, set the SetpointStatus to the configured default option, otherwise remove the hold
+    value = value ? this.platform.config.options?.thermostat?.thermostatSetpointStatus : this.noHoldSetpointStatusMode;
+    this.platform.log.debug(`Set SetpointStatus: ${value}`);
+    this.SetpointStatus = value;
+    this.doThermostatUpdate.next();
     callback(null);
   }
 
