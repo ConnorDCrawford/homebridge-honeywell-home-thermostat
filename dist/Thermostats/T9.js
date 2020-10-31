@@ -471,6 +471,8 @@ class T9 {
             this.platform.log.debug(`Set SetpointStatus: ${value}`);
             this.SetpointStatus = value;
             this.doThermostatUpdate.next();
+            // Do an additional update to get the new Setpoint Status after clearing the hold
+            this.doThermostatUpdate.next();
         }
         callback(null);
     }
