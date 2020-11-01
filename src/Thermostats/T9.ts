@@ -191,15 +191,15 @@ export class T9 {
 
     // Remove setpoint status control
     this.holdEnabledService =
-      accessory.getServiceById(this.platform.Service.Switch, 'hold_enabled_switch') ||
+      accessory.getServiceById(this.platform.Service.Switch, 'hold_active_switch') ||
       this.accessory.addService(
         this.platform.Service.Switch,
-        `${this.device.name} ${this.device.deviceClass} Hold Enabled`,
-        'hold_enabled_switch',
+        `${this.device.name} ${this.device.deviceClass} Hold Active`,
+        'hold_active_switch',
       );
     this.holdEnabledService
       .getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setSetpointStatusHoldEnabled.bind(this));
+      .on('set', this.setSetpointStatusHoldActive.bind(this));
 
     // Hold setpoint status controls
     this.holdService = accessory.getServiceById(this.platform.Service.Switch, 'hold_mode_switch') ||
@@ -568,6 +568,9 @@ export class T9 {
   setHeatingThresholdTemperature(value: any, callback: (arg0: null) => void) {
     this.platform.log.debug(`Set HeatingThresholdTemperature: ${value}`);
     this.HeatingThresholdTemperature = value;
+    if (this.SetpointStatus === this.noHoldSetpointStatusMode) {
+      this.SetpointStatus = this.platform.config.options?.thermostat?.thermostatSetpointStatus as string;
+    }
     this.doThermostatUpdate.next();
     callback(null);
   }
@@ -575,6 +578,9 @@ export class T9 {
   setCoolingThresholdTemperature(value: any, callback: (arg0: null) => void) {
     this.platform.log.debug(`Set CoolingThresholdTemperature: ${value}`);
     this.CoolingThresholdTemperature = value;
+    if (this.SetpointStatus === this.noHoldSetpointStatusMode) {
+      this.SetpointStatus = this.platform.config.options?.thermostat?.thermostatSetpointStatus as string;
+    }
     this.doThermostatUpdate.next();
     callback(null);
   }
@@ -582,6 +588,9 @@ export class T9 {
   setTargetTemperature(value: any, callback: (arg0: null) => void) {
     this.platform.log.debug(`Set TargetTemperature:': ${value}`);
     this.TargetTemperature = value;
+    if (this.SetpointStatus === this.noHoldSetpointStatusMode) {
+      this.SetpointStatus = this.platform.config.options?.thermostat?.thermostatSetpointStatus as string;
+    }
     this.doThermostatUpdate.next();
     callback(null);
   }
@@ -602,20 +611,15 @@ export class T9 {
   }
 
   setSetpointStatusHoldMode(value: any, callback: (arg0: null) => void) {
-    if (this.noHoldSetpointStatusMode !== this.SetpointStatus) {
-      // Will set SetpointStatus to the first element in setpointStatusMode ('TemporaryHold') if off, or the last ('PermanentHold') if on
-      value = this.setpointStatusMode[value * (this.setpointStatusMode.length - 1)];
-      this.platform.log.debug(`Set SetpointStatus: ${value}`);
-      this.SetpointStatus = value;
-      this.doThermostatUpdate.next();
-    } else {
-      // Hold is disabled, return hold mode switch to off
-      this.holdService.updateCharacteristic(this.platform.Characteristic.On, false);
-    }
+    // Will set SetpointStatus to the first element in setpointStatusMode ('TemporaryHold') if off, or the last ('PermanentHold') if on
+    value = this.setpointStatusMode[value * (this.setpointStatusMode.length - 1)];
+    this.platform.log.debug(`Set SetpointStatus: ${value}`);
+    this.SetpointStatus = value;
+    this.doThermostatUpdate.next();
     callback(null);
   }
 
-  setSetpointStatusHoldEnabled(value: any, callback: (arg0: null) => void) {
+  setSetpointStatusHoldActive(value: any, callback: (arg0: null) => void) {
     // If on, set the SetpointStatus to the configured default option, otherwise remove the hold
     value = value ? this.platform.config.options?.thermostat?.thermostatSetpointStatus : this.noHoldSetpointStatusMode;
     this.platform.log.debug(`Set SetpointStatus: ${value}`);

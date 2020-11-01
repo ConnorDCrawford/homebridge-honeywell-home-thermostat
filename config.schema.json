@@ -65,14 +65,10 @@
               "thermostatSetpointStatus": {
                 "title": "Thermostat Setpoint Status",
                 "type": "string",
-                "description": "For \"LCC-\" devices only. \"PermanentHold\" will hold the setpoint until user requests another change. \"NoHold\" will return to schedule. \"TemporaryHold\" will hold the set temperature until \"nextPeriodTime\".",
+                "description": "For \"LCC-\" devices only. \"PermanentHold\" will hold the setpoint until user requests another change. \"TemporaryHold\" will hold the set temperature until \"nextPeriodTime\".",
                 "required": true,
                 "default": "PermanentHold",
                 "oneOf": [
-                  {
-                    "title": "No Hold",
-                    "enum": ["NoHold"]
-                  },
                   {
                     "title": "Permanent Hold",
                     "enum": ["PermanentHold"]
